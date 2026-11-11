@@ -173,8 +173,8 @@ intptr_t Log(const char *expression, const char *fileName, unsigned int line, in
 
 		if (localtime_s(&local, &t) == 0)
 		{
-			fprintf(LogFile, "[%02d.%02d.%04d %02d:%02d:%02d][%8s:%04d] %-102s %-20zd (0x%0*zX)\n",
-					local.tm_mday, local.tm_mon + 1, local.tm_year + 1900, local.tm_hour, local.tm_min, local.tm_sec, fileName, line, expression, result, (int) (sizeof(result) * 2), result);
+			fprintf(LogFile, "[%02d.%02d.%04d %02d:%02d:%02d][%8s:%04u] %-102s %-20lld (0x%0*llX)\n",
+					local.tm_mday, local.tm_mon + 1, local.tm_year + 1900, local.tm_hour, local.tm_min, local.tm_sec, fileName, line, expression, (long long) result, (int) (sizeof(result) * 2), (unsigned long long) result);
 
 			fflush(LogFile);
 		}
@@ -486,7 +486,7 @@ bool GetGpuz(GPUZ_SH_MEM &gpuz)
 {
 	bool result = false;
 
-	memset(&gpuz, 0, sizeof(gpuz));
+	gpuz = GPUZ_SH_MEM();
 
 	HANDLE mapFile = 0;
 
