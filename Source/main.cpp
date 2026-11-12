@@ -135,6 +135,7 @@ const size_t MaxRequestSize = 16 * 1024;
 const unsigned int MaxEntryCount = 1000000;
 const long MaxClients = 32;
 const DWORD ClientTimeoutMs = 5000;
+const ULONGLONG ClientTotalTimeoutMs = 10000;
 const long long MaxLogFileSize = 10 * 1024 * 1024;
 
 unsigned int Port = 60000;
@@ -177,6 +178,15 @@ intptr_t Log(const char *expression, const char *fileName, unsigned int line, in
 					local.tm_mday, local.tm_mon + 1, local.tm_year + 1900, local.tm_hour, local.tm_min, local.tm_sec, fileName, line, expression, (long long) result, (int) (sizeof(result) * 2), (unsigned long long) result);
 
 			fflush(LogFile);
+
+			// Rotate: start over when the log grows too big (every request writes many lines).
+			if (_ftelli64(LogFile) > MaxLogFileSize)
+			{
+				FILE *reopened = freopen("log.txt", "w", LogFile);
+
+				if (!reopened)
+					LogFile = 0;
+			}
 		}
 
 		LeaveCriticalSection(&LogLock);
@@ -1056,7 +1066,9 @@ unsigned long int __stdcall ClientThread(void *parameter)
 
 	char chunk[2048];
 
-	while (request.size() < MaxRequestSize)
+	ULONGLONG deadline = GetTickCount64() + ClientTotalTimeoutMs;
+
+	while ((request.size() < MaxRequestSize) && (GetTickCount64() < deadline))
 	{
 		int received = recv(clientSocket, chunk, sizeof(chunk), 0);
 
@@ -1156,6 +1168,11 @@ void CreateServer()
 
 		if (serverSocket != INVALID_SOCKET)
 		{
+			// Prevent other processes from binding the same port.
+			BOOL exclusive = TRUE;
+
+			setsockopt(serverSocket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char*) &exclusive, sizeof(exclusive));
+
 			struct sockaddr_in serverAddress = {0};
 
 			serverAddress.sin_family = AF_INET;
@@ -1301,8 +1318,31 @@ bool ParseArgs(int argc, char *argv[])
 	return true;
 }
 
+// index.html, 404.html and log.txt live next to the executable, not in the current directory
+// (which is e.g. C:\\Windows\\System32 when started elevated or from the task scheduler).
+void SetWorkingDirectoryToExe()
+{
+	char path[MAX_PATH] = {0};
+
+	DWORD length = GetModuleFileNameA(0, path, MAX_PATH);
+
+	if ((length == 0) || (length >= MAX_PATH))
+		return;
+
+	char *slash = strrchr(path, '\\');
+
+	if (slash)
+	{
+		*slash = '\0';
+
+		SetCurrentDirectoryA(path);
+	}
+}
+
 int main(int argc, char *argv[])
 {
+	SetWorkingDirectoryToExe();
+
 	if ((argc > 1) && (!ParseArgs(argc, argv)))
 		return EXIT_SUCCESS;
 
