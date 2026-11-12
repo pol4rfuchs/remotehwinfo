@@ -183,6 +183,7 @@ intptr_t Log(const char *expression, const char *fileName, unsigned int line, in
 			if (_ftelli64(LogFile) > MaxLogFileSize)
 			{
 				// freopen closes the old stream and reuses the same FILE object; on failure it is gone.
+				// cppcheck-suppress leakReturnValNotUsed
 				if (freopen("log.txt", "w", LogFile) == 0)
 					LogFile = 0;
 			}
