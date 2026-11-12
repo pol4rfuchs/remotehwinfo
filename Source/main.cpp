@@ -182,9 +182,8 @@ intptr_t Log(const char *expression, const char *fileName, unsigned int line, in
 			// Rotate: start over when the log grows too big (every request writes many lines).
 			if (_ftelli64(LogFile) > MaxLogFileSize)
 			{
-				FILE *reopened = freopen("log.txt", "w", LogFile);
-
-				if (!reopened)
+				// freopen closes the old stream and reuses the same FILE object; on failure it is gone.
+				if (freopen("log.txt", "w", LogFile) == 0)
 					LogFile = 0;
 			}
 		}
