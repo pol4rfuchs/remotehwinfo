@@ -1,5 +1,10 @@
 ### Changelog:
 
+- **v0.7** - [RemoteHWInfo v0.7](https://github.com/pol4rfuchs/remotehwinfo/releases/tag/v0.7)
+  * Log file is rotated while running (10 MB limit) instead of growing without bound.
+  * `index.html`, `404.html` and `log.txt` are now located next to the executable, independent of the working directory.
+  * Exclusive port binding (no other process can share the port) and a total request timeout against slow clients.
+  * Build with `/sdl` security checks.
 - **v0.6** - [RemoteHWInfo v0.6](https://github.com/pol4rfuchs/remotehwinfo/releases/tag/v0.6)
   * Security/stability fixes: bounds-checked shared memory and HTTP handling, proper JSON escaping, request limits/timeouts, `Content-Length`, no entry limit.
   * index.html: escape HTML (XSS), CSS units, safer refresh.
