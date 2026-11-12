@@ -672,17 +672,32 @@ void ParseQuery(const std::string &query, EntryFilter &filter)
 	}
 }
 
+/*
+ * Builds the complete JSON document served to clients.
+ *
+ * The document has one top-level object per enabled data source, in a fixed
+ * order: "hwinfo", "gpuz", "afterburner". Each source is read from its shared
+ * memory block; a source that is disabled or currently unavailable is omitted.
+ *
+ * Every sensor/reading/entry receives a running "entryIndex" that is shared
+ * across all sources. The index advances even for entries the filter hides, so
+ * indexes stay stable and a client can request specific entries by index.
+ */
 std::string CreateJson(const EntryFilter &filter)
 {
 	Output out;
 
+	// Running index across all sources; incremented for filtered-out entries too.
 	unsigned int entryIndex = 0;
 
+	// "first": no element written yet in the current array (controls the comma).
 	bool first = false;
+	// "first_output": no source object written yet (controls the comma between sources).
 	bool first_output = true;
 
 	out.Append("{\n");
 
+	// --- HWiNFO: header values, then the sensors array, then the readings array ---
 	if (Hwinfo)
 	{
 		HwinfoData hwinfo = {};
@@ -713,6 +728,8 @@ std::string CreateJson(const EntryFilter &filter)
 
 			first = true;
 
+			// Records are located via the stride (sensorSize) reported by HWiNFO rather
+			// than sizeof(), so layouts with larger records are still read correctly.
 			for (unsigned int i = 0; i < h.sensorCount; ++i)
 			{
 				const HWINFO_SENSORS_SENSOR *sensor = (const HWINFO_SENSORS_SENSOR*) (&hwinfo.sensors[0] + (size_t) h.sensorSize * i);
@@ -749,6 +766,7 @@ std::string CreateJson(const EntryFilter &filter)
 
 			first = true;
 
+			// Same stride-based access for the readings (readingSize).
 			for (unsigned int i = 0; i < h.readingCount; ++i)
 			{
 				const HWINFO_SENSORS_READING *reading = (const HWINFO_SENSORS_READING*) (&hwinfo.readings[0] + (size_t) h.readingSize * i);
@@ -796,8 +814,10 @@ std::string CreateJson(const EntryFilter &filter)
 		}
 	}
 
+	// --- GPU-Z: key/value data array, then the sensors array (128 fixed slots each) ---
 	if (Gpuz)
 	{
+		// Large structure, so it is heap-allocated instead of placed on the stack.
 		GPUZ_SH_MEM *gpuz = new GPUZ_SH_MEM;
 
 		if (GetGpuz(*gpuz))
@@ -821,6 +841,7 @@ std::string CreateJson(const EntryFilter &filter)
 
 			first = true;
 
+			// Unused slots have an empty key and are skipped (they get no entryIndex).
 			for (unsigned int i = 0; i < 128; ++i)
 			{
 				if (gpuz->data[i].key[0] != L'\0')
@@ -854,6 +875,7 @@ std::string CreateJson(const EntryFilter &filter)
 
 			first = true;
 
+			// Unused sensor slots have an empty name and are skipped as well.
 			for (unsigned int i = 0; i < 128; ++i)
 			{
 				if (gpuz->sensors[i].name[0] != L'\0')
@@ -892,6 +914,7 @@ std::string CreateJson(const EntryFilter &filter)
 		delete gpuz;
 	}
 
+	// --- MSI Afterburner: one entry per monitored value ---
 	if (Afterburner)
 	{
 		AfterburnerData afterburner = {};
@@ -926,6 +949,8 @@ std::string CreateJson(const EntryFilter &filter)
 
 				if (filter.IsEnabled(entryIndex))
 				{
+					// The number of decimals is encoded in the printf-style format string
+					// (e.g. "%.2f"); skip the two leading characters and parse the number.
 					unsigned int digits = 0;
 
 					if (strnlen(entry->format, sizeof(entry->format)) > 2)
@@ -970,6 +995,7 @@ std::string CreateJson(const EntryFilter &filter)
 		}
 	}
 
+	// Close the top-level object.
 	out.Append("\n}");
 
 	return out.text;
